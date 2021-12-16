@@ -1,6 +1,14 @@
+cargo run --release --all-features
+
+or
+
+cargo run --release --features persistence
+
 
 https://github.com/xdg-rs/dirs/blob/master/directories/src/lin.rs#L82
+
 cat ~/.local/share/eframetemplate/app.ron
+
 
 # 🖌 egui: an easy-to-use GUI in pure Rust
 
