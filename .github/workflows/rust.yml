@@ -3,10 +3,11 @@ on: [push, pull_request]
 name: CI
 
 env:
-  # This is required to enable the web_sys clipboard API which egui_web uses
+  # This is required to enable the web_sys clipboard API which eframe web uses
   # https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.Clipboard.html
   # https://rustwasm.github.io/docs/wasm-bindgen/web-sys/unstable-apis.html
-  RUSTFLAGS: --cfg=web_sys_unstable_apis
+  RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
+  RUSTDOCFLAGS: -D warnings
 
 jobs:
   check_default:
@@ -17,24 +18,32 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: sudo apt-get update && sudo apt-get install libspeechd-dev
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install libspeechd-dev libgtk-3-dev
       - uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --locked
 
   check_all_features:
     name: cargo check --all-features
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-latest, macOS-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: sudo apt-get update && sudo apt-get install libspeechd-dev
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install libspeechd-dev libgtk-3-dev
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -48,13 +57,40 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
+          target: wasm32-unknown-unknown
           override: true
-      - run: rustup target add wasm32-unknown-unknown
       - uses: actions-rs/cargo@v1
         with:
           command: check
           args: -p egui_demo_app --lib --target wasm32-unknown-unknown
+
+  check_egui_demo_app:
+    name: cargo check -p egui_demo_app
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.61.0
+          override: true
+      - name: check
+        run: cargo check -p egui_demo_app
+
+  check_wasm_eframe_with_features:
+    name: cargo check wasm eframe
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.61.0
+          target: wasm32-unknown-unknown
+          override: true
+      - name: check
+        run: cargo check -p eframe --lib --no-default-features --features glow,persistence --target wasm32-unknown-unknown
 
   check_web_all_features:
     name: cargo check web --all-features
@@ -64,9 +100,9 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
+          target: wasm32-unknown-unknown
           override: true
-      - run: rustup target add wasm32-unknown-unknown
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -80,9 +116,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: sudo apt-get update && sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev libgtk-3-dev # libgtk-3-dev is used by rfd
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev libgtk-3-dev # libgtk-3-dev is used by rfd
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -96,30 +134,32 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: rustup component add rustfmt
+          components: rustfmt
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
-  clippy:
-    name: cargo clippy
+  cranky:
+    name: cargo cranky
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: rustup component add clippy
-      - run: sudo apt-get update && sudo apt-get install libspeechd-dev libgtk-3-dev # libgtk-3-dev is used by rfd
+      - run: cargo install cargo-cranky
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install libspeechd-dev libgtk-3-dev # libgtk-3-dev is used by rfd
       - uses: actions-rs/cargo@v1
         with:
-          command: clippy
-          args: --workspace --all-targets --all-features --  -D warnings -W clippy::all
+          command: cranky
+          args: --workspace --all-targets --all-features --  -D warnings
 
   doc:
     name: cargo doc
@@ -129,21 +169,44 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
           override: true
-      - run: sudo apt-get update && sudo apt-get install libspeechd-dev
-      - run: cargo doc -p emath -p epaint -p egui -p eframe -p epi -p egui_web -p egui-winit -p egui_glium -p egui_glow --lib --no-deps --all-features
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install libspeechd-dev
+      - run: cargo doc --lib --no-deps --all-features
 
-  doc_web:
-    name: cargo doc web
+  cargo-deny:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: EmbarkStudios/cargo-deny-action@v1
+
+  wasm_bindgen:
+    name: wasm-bindgen
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.54.0
+          toolchain: 1.61.0
+          target: wasm32-unknown-unknown
           override: true
-      - run: sudo apt-get update && sudo apt-get install libspeechd-dev
-      - run: rustup target add wasm32-unknown-unknown
-      - run: cargo doc -p egui_web --target wasm32-unknown-unknown --lib --no-deps --all-features
+      - run: ./sh/setup_web.sh
+      - run: ./sh/wasm_bindgen_check.sh
+
+  android:
+    name: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.61.0
+          target: aarch64-linux-android
+          override: true
+
+      - run: cargo check --features wgpu --target aarch64-linux-android
+        working-directory: crates/eframe

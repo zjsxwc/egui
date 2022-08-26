@@ -17,9 +17,11 @@ cat ~/.local/share/eframetemplate/app.ron
 [![Documentation](https://docs.rs/egui/badge.svg)](https://docs.rs/egui)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 [![Build Status](https://github.com/emilk/egui/workflows/CI/badge.svg)](https://github.com/emilk/egui/actions?workflow=CI)
-![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Apache](https://img.shields.io/badge/license-Apache-blue.svg)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/emilk/egui/blob/master/LICENSE-MIT)
+[![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/emilk/egui/blob/master/LICENSE-APACHE)
+[![Discord](https://img.shields.io/discord/900275882684477440?label=egui%20discord)](https://discord.gg/JFcEma9bJq)
 
+👉 [Click to run the web demo](https://www.egui.rs/#demo) 👈
 
 egui is a simple, fast, and highly portable immediate mode GUI library for Rust. egui runs on the web, natively, and [in your favorite game engine](#integrations) (or will soon).
 
@@ -29,43 +31,21 @@ egui can be used anywhere you can draw textured triangles, which means you can e
 
 Sections:
 
+* [Example](#example)
 * [Quick start](#quick-start)
 * [Demo](#demo)
 * [Goals](#goals)
 * [Who is egui for?](#who-is-egui-for)
 * [State / features](#state)
-* [How it works](#how-it-works)
 * [Integrations](#integrations)
 * [Why immediate mode](#why-immediate-mode)
 * [FAQ](#faq)
 * [Other](#other)
 * [Credits](#credits)
 
-## Quick start
+([egui 的中文翻译文档 / chinese translation](https://github.com/Re-Ch-Love/egui-doc-cn/blob/main/README_zh-hans.md))
 
-If you just want to write a GUI application in Rust (for the web or for native), go to <https://github.com/emilk/eframe_template/> and follow the instructions there!
-
-If you want to integrate egui into an existing engine, go to the [Integrations](#integrations) section.
-
-If you have questions, use [Discussions](https://github.com/emilk/egui/discussions). If you want to contribute to egui, please read the [Contributing Guidelines](https://github.com/emilk/egui/blob/master/CONTRIBUTING.md)
-
-## Demo
-
-[Click to run egui web demo](https://emilk.github.io/egui/index.html) (works in any browser with WASM and WebGL support). Uses [`egui_web`](https://github.com/emilk/egui/tree/master/egui_web).
-
-To test the demo app locally, run `cargo run --release -p egui_demo_app`.
-
-The native backend is [`egui_glium`](https://github.com/emilk/egui/tree/master/egui_glium) (using [`glium`](https://github.com/glium/glium)) and should work out-of-the-box on Mac and Windows, but on Linux you need to first run:
-
-`sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev`
-
-On Fedora Rawhide you need to run:
-
-`dnf install clang clang-devel clang-tools-extra speech-dispatcher-devel libxkbcommon-devel pkg-config openssl-devel`
-
-**NOTE**: This is just for the demo app - egui itself is completely platform agnostic!
-
-### Example
+## Example
 
 ``` rust
 ui.heading("My egui Application");
@@ -82,6 +62,30 @@ ui.label(format!("Hello '{}', age {}", name, age));
 
 <img src="media/demo.gif">
 
+## Quick start
+
+There are simple examples in [the `examples/` folder](https://github.com/emilk/egui/blob/master/examples/). If you want to write a web app, then go to <https://github.com/emilk/eframe_template/> and follow the instructions. The official docs are at <https://docs.rs/egui>. For inspiration and more examples, check out the [the egui web demo](https://www.egui.rs/#demo) and follow the links in it to its source code.
+
+If you want to integrate egui into an existing engine, go to the [Integrations](#integrations) section.
+
+If you have questions, use [GitHub Discussions](https://github.com/emilk/egui/discussions). There is also [an egui discord server](https://discord.gg/JFcEma9bJq). If you want to contribute to egui, please read the [Contributing Guidelines](https://github.com/emilk/egui/blob/master/CONTRIBUTING.md).
+
+## Demo
+
+[Click to run egui web demo](https://www.egui.rs/#demo) (works in any browser with WASM and WebGL support). Uses [`eframe`](https://github.com/emilk/egui/tree/master/crates/eframe).
+
+To test the demo app locally, run `cargo run --release -p egui_demo_app`.
+
+The native backend is [`egui_glow`](https://github.com/emilk/egui/tree/master/crates/egui_glow) (using [`glow`](https://crates.io/crates/glow)) and should work out-of-the-box on Mac and Windows, but on Linux you need to first run:
+
+`sudo apt-get install -y libclang-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev`
+
+On Fedora Rawhide you need to run:
+
+`dnf install clang clang-devel clang-tools-extra speech-dispatcher-devel libxkbcommon-devel pkg-config openssl-devel libxcb-devel`
+
+**NOTE**: This is just for the demo app - egui itself is completely platform agnostic!
+
 ## Goals
 
 * The easiest to use GUI library
@@ -92,10 +96,10 @@ ui.label(format!("Hello '{}', age {}", name, age));
 * A simple 2D graphics API for custom painting ([`epaint`](https://docs.rs/epaint)).
 * No callbacks
 * Pure immediate mode
-* Extensible: [easy to write your own widgets for egui](https://github.com/emilk/egui/blob/master/egui_demo_lib/src/apps/demo/toggle_switch.rs)
+* Extensible: [easy to write your own widgets for egui](https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/toggle_switch.rs)
 * Modular: You should be able to use small parts of egui and combine them in new ways
 * Safe: there is no `unsafe` code in egui
-* Minimal dependencies: [`ab_glyph`](https://crates.io/crates/ab_glyph) [`ahash`](https://crates.io/crates/ahash) [`atomic_refcell`](https://crates.io/crates/atomic_refcell), [`nohash-hasher`](https://crates.io/crates/nohash-hasher)
+* Minimal dependencies: [`ab_glyph`](https://crates.io/crates/ab_glyph) [`ahash`](https://crates.io/crates/ahash) [`nohash-hasher`](https://crates.io/crates/nohash-hasher) [`parking_lot`](https://crates.io/crates/parking_lot)
 
 egui is *not* a framework. egui is a library you call into, not an environment you program for.
 
@@ -122,7 +126,7 @@ The obvious alternative to egui is [`imgui-rs`](https://github.com/Gekkio/imgui-
 * egui is pure Rust
 * egui is easily compiled to WASM
 * egui lets you use native Rust string types (`imgui-rs` forces you to use annoying macros and wrappers for zero-terminated strings)
-* [Writing your own widgets in egui is simple](https://github.com/emilk/egui/blob/master/egui_demo_lib/src/apps/demo/toggle_switch.rs)
+* [Writing your own widgets in egui is simple](https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/toggle_switch.rs)
 
 egui also tries to improve your experience in other small ways:
 
@@ -156,76 +160,78 @@ Light Theme:
 
 <img src="media/light_theme.png" width="50%">
 
-## How it works
-
-Loop:
-
-* Gather input (mouse, touches, keyboard, screen size, etc) and give it to egui
-* Run application code (Immediate Mode GUI)
-* Tell egui to tessellate the frame graphics to a triangle mesh
-* Render the triangle mesh with your favorite graphics API (see [OpenGL example](https://github.com/emilk/egui/blob/master/egui_glium/src/painter.rs)) or use `eframe`, the egui framework crate.
-
 ## Integrations
 
-egui is build to be easy to integrate into any existing game engine or platform you are working on.
+egui is built to be easy to integrate into any existing game engine or platform you are working on.
 egui itself doesn't know or care on what OS it is running or how to render things to the screen - that is the job of the egui integration.
-The integration needs to do two things:
 
-* **IO**: Supply egui with input (mouse position, keyboard presses, …) and handle egui output (cursor changes, copy-paste integration, …).
-* **Painting**: Render the textured triangles that egui outputs.
+An integration needs to do the following each frame:
 
-### Official
+* **Input**: Gather input (mouse, touches, keyboard, screen size, etc) and give it to egui
+* Run the application code
+* **Output**: Handle egui output (cursor changes, paste, texture allocations, …)
+* **Painting**: Render the triangle mesh egui produces (see [OpenGL example](https://github.com/emilk/egui/blob/master/crates/egui_glium/src/painter.rs))
 
-There are three official egui integrations made for apps:
+### Official integrations
 
-* [`egui_web`](https://github.com/emilk/egui/tree/master/egui_web) for making a web app. Compiles to WASM, renders with WebGL. [Click to run the egui demo](https://emilk.github.io/egui/index.html).
-* [`egui_glium`](https://github.com/emilk/egui/tree/master/egui_glium) for compiling native apps with [Glium](https://github.com/glium/glium).
-* [`egui_glow`](https://github.com/emilk/egui/tree/master/egui_glow) for compiling native apps with [Glow](https://github.com/grovesNL/glow).
-* [`egui-winit`](https://github.com/emilk/egui/tree/master/egui-winit) for integrating with [`winit`](https://github.com/rust-windowing/winit). `egui-winit` is used by `egui_glium` and `egui_glow`.
+These are the official egui integrations:
 
-If you making an app, consider using [`eframe`](https://github.com/emilk/egui/tree/master/eframe), a framework which allows you to write code that works on both the web (`egui_web`) and native (using `egui_glium`).
+* [`eframe`](https://github.com/emilk/egui/tree/master/crates/eframe) for compiling the same app to web/wasm and desktop/native. Uses `egui_glow` and `egui-winit`.
+* [`egui_glium`](https://github.com/emilk/egui/tree/master/crates/egui_glium) for compiling native apps with [Glium](https://github.com/glium/glium).
+* [`egui_glow`](https://github.com/emilk/egui/tree/master/crates/egui_glow) for rendering egui with [glow](https://github.com/grovesNL/glow) on native and web, and for making native apps.
+* [`egui-wgpu`](https://github.com/emilk/egui/tree/master/crates/egui-wgpu) for [wgpu](https://crates.io/crates/wgpu) (WebGPU API).
+* [`egui-winit`](https://github.com/emilk/egui/tree/master/crates/egui-winit) for integrating with [winit](https://github.com/rust-windowing/winit).
 
-### 3rd party
+### 3rd party integrations
 
 * [`amethyst_egui`](https://github.com/jgraef/amethyst_egui) for [the Amethyst game engine](https://amethyst.rs/).
 * [`bevy_egui`](https://github.com/mvlabat/bevy_egui) for [the Bevy game engine](https://bevyengine.org/).
 * [`egui_glfw_gl`](https://github.com/cohaereo/egui_glfw_gl) for [GLFW](https://crates.io/crates/glfw).
-* [`egui-miniquad`](https://github.com/not-fl3/egui-miniquad) for [Miniquad](https://github.com/not-fl3/miniquad).
-* [`egui-macroquad`](https://github.com/optozorax/egui-macroquad) for [macroquad](https://github.com/not-fl3/macroquad).
 * [`egui_sdl2_gl`](https://crates.io/crates/egui_sdl2_gl) for [SDL2](https://crates.io/crates/sdl2).
 * [`egui_vulkano`](https://github.com/derivator/egui_vulkano) for [Vulkano](https://github.com/vulkano-rs/vulkano).
-* [`egui-winit-ash-integration`](https://github.com/MatchaChoco010/egui-winit-ash-integration) for [winit](https://github.com/rust-windowing/winit) and [ash](https://github.com/MaikKlein/ash).
 * [`egui_winit_vulkano`](https://github.com/hakolao/egui_winit_vulkano) for [Vulkano](https://github.com/vulkano-rs/vulkano).
+* [`egui-macroquad`](https://github.com/optozorax/egui-macroquad) for [macroquad](https://github.com/not-fl3/macroquad).
+* [`egui-miniquad`](https://github.com/not-fl3/egui-miniquad) for [Miniquad](https://github.com/not-fl3/miniquad).
+* [`egui-tetra`](https://crates.io/crates/egui-tetra) for [Tetra](https://crates.io/crates/tetra), a 2D game framework.
+* [`egui-winit-ash-integration`](https://github.com/MatchaChoco010/egui-winit-ash-integration) for [winit](https://github.com/rust-windowing/winit) and [ash](https://github.com/MaikKlein/ash).
 * [`fltk-egui`](https://crates.io/crates/fltk-egui) for [fltk-rs](https://github.com/fltk-rs/fltk-rs).
 * [`ggez-egui`](https://github.com/NemuiSen/ggez-egui) for the [ggez](https://ggez.rs/) game framework.
-* [`godot-egui`](https://github.com/setzer22/godot-egui) for [`godot-rust`](https://github.com/godot-rust/godot-rust).
-* [`nannou_egui`](https://github.com/AlexEne/nannou_egui) for [nannou](https://nannou.cc).
-* [`egui-tetra`](https://crates.io/crates/egui-tetra) for [Tetra](https://crates.io/crates/tetra), a 2D game framework.
-* [`egui_wgpu_backend`](https://crates.io/crates/egui_wgpu_backend) for [`wgpu`](https://crates.io/crates/wgpu) (WebGPU API).
+* [`godot-egui`](https://github.com/setzer22/godot-egui) for [godot-rust](https://github.com/godot-rust/godot-rust).
+* [`nannou_egui`](https://github.com/nannou-org/nannou/tree/master/nannou_egui) for [nannou](https://nannou.cc).
+* [`notan_egui`](https://github.com/Nazariglez/notan/tree/main/crates/notan_egui) for [notan](https://github.com/Nazariglez/notan).
+* [`screen-13-egui`](https://github.com/attackgoat/screen-13/tree/master/contrib/screen-13-egui) for [Screen 13](https://github.com/attackgoat/screen-13).
+* [`smithay-egui`](https://github.com/Smithay/smithay-egui) for [smithay](https://github.com/Smithay/smithay/).
 
-Missing an integration for the thing you're working on? Create one, it is easy!
+Missing an integration for the thing you're working on? Create one, it's easy!
 
 ### Writing your own egui integration
 
-You need to collect [`egui::RawInput`](https://docs.rs/egui/latest/egui/struct.RawInput.html), paint [`egui::ClippedMesh`](https://docs.rs/epaint/):es and handle [`egui::Output`](https://docs.rs/egui/latest/egui/struct.Output.html). The basic structure is this:
+You need to collect [`egui::RawInput`](https://docs.rs/egui/latest/egui/struct.RawInput.html) and handle [`egui::FullOutput`](https://docs.rs/egui/latest/egui/struct.FullOutput.html). The basic structure is this:
 
 ``` rust
 let mut egui_ctx = egui::CtxRef::default();
 
 // Game loop:
 loop {
+    // Gather input (mouse, touches, keyboard, screen size, etc):
     let raw_input: egui::RawInput = my_integration.gather_input();
-    let (output, shapes) = egui_ctx.run(raw_input, |egui_ctx| {
+    let full_output = egui_ctx.run(raw_input, |egui_ctx| {
         my_app.ui(egui_ctx); // add panels, windows and widgets to `egui_ctx` here
     });
-    let clipped_meshes = egui_ctx.tessellate(shapes); // create triangles to paint
-    my_integration.paint(clipped_meshes);
-    my_integration.set_cursor_icon(output.cursor_icon);
-    // Also see `egui::Output` for more
+    let clipped_primitives = egui_ctx.tessellate(full_output.shapes); // creates triangles to paint
+
+    my_integration.paint(&full_output.textures_delta, clipped_primitives);
+
+    let platform_output = full_output.platform_output;
+    my_integration.set_cursor_icon(platform_output.cursor_icon);
+    if !platform_output.copied_text.is_empty() {
+        my_integration.set_clipboard_text(platform_output.copied_text);
+    }
+    // See `egui::FullOutput` and `egui::PlatformOutput` for more
 }
 ```
 
-For a reference OpenGL backend, see [the `egui_glium` painter](https://github.com/emilk/egui/blob/master/egui_glium/src/painter.rs), [the `egui_glow` painter](https://github.com/emilk/egui/blob/master/egui_glow/src/painter.rs), or [the `egui_web` `WebGL` painter](https://github.com/emilk/egui/blob/master/egui_web/src/webgl2.rs).
+For a reference OpenGL backend, see [the `egui_glium` painter](https://github.com/emilk/egui/blob/master/crates/egui_glium/src/painter.rs) or [the `egui_glow` painter](https://github.com/emilk/egui/blob/master/crates/egui_glow/src/painter.rs).
 
 ### Debugging your integration
 
@@ -242,11 +248,12 @@ For a reference OpenGL backend, see [the `egui_glium` painter](https://github.co
 
 * egui uses premultiplied alpha, so make sure your blending function is `(ONE, ONE_MINUS_SRC_ALPHA)`.
 * Make sure your texture sampler is clamped (`GL_CLAMP_TO_EDGE`).
-* Use an sRGBA-aware texture if available (e.g. `GL_SRGB8_ALPHA8`).
-  * Otherwise: remember to decode gamma in the fragment shader.
-* Decode the gamma of the incoming vertex colors in your vertex shader.
-* Turn on sRGBA/linear framebuffer if available (`GL_FRAMEBUFFER_SRGB`).
-  * Otherwise: gamma-encode the colors before you write them again.
+* egui prefers linear color spaces for all blending so:
+  * Use an sRGBA-aware texture if available (e.g. `GL_SRGB8_ALPHA8`).
+    * Otherwise: remember to decode gamma in the fragment shader.
+  * Decode the gamma of the incoming vertex colors in your vertex shader.
+  * Turn on sRGBA/linear framebuffer if available (`GL_FRAMEBUFFER_SRGB`).
+    * Otherwise: gamma-encode the colors before you write them again.
 
 
 ## Why immediate mode
@@ -309,14 +316,26 @@ Also see [GitHub Discussions](https://github.com/emilk/egui/discussions/categori
 Yes! But you need to install your own font (`.ttf` or `.otf`) using `Context::set_fonts`.
 
 ### Can I customize the look of egui?
-Yes! You can customize the colors, spacing and sizes of everything. By default egui comes with a dark and a light theme.
+Yes! You can customize the colors, spacing, fonts and sizes of everything using `Context::set_style`.
+
+Here is an example (from https://github.com/AlexxxRu/TinyPomodoro):
+
+<img src="media/pompodoro-skin.png" width="50%">
+
+### How do I use egui with `async`?
+If you call `.await` in your GUI code, the UI will freeze, which is very bad UX. Instead, keep the GUI thread non-blocking and communicate with any concurrent tasks (`async` tasks or other threads) with something like:
+* Channels (e.g. [`std::sync::mpsc::channel`](https://doc.rust-lang.org/std/sync/mpsc/fn.channel.html)). Make sure to use [`try_recv`](https://doc.rust-lang.org/std/sync/mpsc/struct.Receiver.html#method.try_recv) so you don't block the gui thread!
+* `Arc<Mutex<Value>>` (background thread sets a value; GUI thread reads it)
+* [`poll_promise::Promise`](https://docs.rs/poll-promise) (example: [`examples/download_image/`](https://github.com/emilk/egui/blob/master/examples/download_image/))
+* [`eventuals::Eventual`](https://docs.rs/eventuals/latest/eventuals/struct.Eventual.html)
+* [`tokio::sync::watch::channel`](https://docs.rs/tokio/latest/tokio/sync/watch/fn.channel.html)
 
 ### What about accessibility, such as screen readers?
-There is experimental support for a screen reader. In [the web demo](https://emilk.github.io/egui/index.html) you can enable it in the "Backend" tab.
+There is experimental support for a screen reader. In [the web demo](https://www.egui.rs/#demo) you can enable it in the "Backend" tab.
 
 Read more at <https://github.com/emilk/egui/issues/167>.
 
-### What is the difference between [egui](https://docs.rs/egui) and [eframe](https://github.com/emilk/egui/tree/master/eframe)?
+### What is the difference between [egui](https://docs.rs/egui) and [eframe](https://github.com/emilk/egui/tree/master/crates/eframe)?
 
 `egui` is a 2D user interface library for laying out and interacting with buttons, sliders, etc.
 `egui` has no idea if it is running on the web or natively, and does not know how to collect input or show things on screen.
@@ -326,16 +345,24 @@ It is common to use `egui` from a game engine (using e.g. [`bevy_egui`](https://
 but you can also use `egui` stand-alone using `eframe`. `eframe` has integration for web and native, and handles input and rendering.
 The _frame_ in `eframe` stands both for the frame in which your egui app resides and also for "framework" (`frame` is a framework, `egui` is a library).
 
-### Why is `egui_web` using so much CPU in Firefox?
-On Linux and Mac, Firefox will copy the WebGL render target from GPU, to CPU and then back again: https://bugzilla.mozilla.org/show_bug.cgi?id=1010527#c0
-
-### Why does my web app not fill the full width of the screen?
-To alleviate the above mentioned performance issues the default max-width of an egui web app is 1024 points. You can change this by overriding the `fn max_size_points` of [`epi::App`](https://docs.rs/epi/latest/epi/trait.App.html).
-
 ### How do I render 3D stuff in an egui area?
-egui can't do 3D graphics itself, but if you use a 3D library (e.g. [`glium`](https://github.com/glium/glium) using [`egui_glium`](https://github.com/emilk/egui/tree/master/egui_glium), or [`miniquad`](https://github.com/not-fl3/miniquad) using [`egui-miniquad`](https://github.com/not-fl3/egui-miniquad)) you can render your 3D content to a texture, then display it using [`ui.image(…)`](https://docs.rs/egui/latest/egui/struct.Ui.html#method.image). You first need to convert the native texture to an [`egui::TextureId`](https://docs.rs/egui/latest/egui/enum.TextureId.html), and how to do this depends on the integration you use (e.g. [`register_glium_texture`](https://docs.rs/egui_glium/latest/egui_glium/struct.Painter.html#method.register_glium_texture)).
+There are multiple ways to combine egui with 3D. The simplest way is to use a 3D library and have egui sit on top of the 3D view. See for instance [`bevy_egui`](https://github.com/mvlabat/bevy_egui) or [`three-d`](https://github.com/asny/three-d).
 
-There is an example for showing a native glium texture in an egui window at <https://github.com/emilk/egui/blob/master/egui_glium/examples/native_texture.rs>.
+If you want to embed 3D into an egui view there are two options.
+
+#### `Shape::Callback`
+Examples:
+* <https://github.com/emilk/egui/blob/master/examples/custom_3d_three-d.rs>
+* <https://github.com/emilk/egui/blob/master/examples/custom_3d_glow.rs>
+
+`Shape::Callback` will call your code when egui gets painted, to show anything using whatever the background rendering context is. When using [`eframe`](https://github.com/emilk/egui/tree/master/crates/eframe) this will be [`glow`](https://github.com/grovesNL/glow). Other integrations will give you other rendering contexts, if they support `Shape::Callback` at all.
+
+#### Render-to-texture
+You can also render your 3D scene to a texture and display it using [`ui.image(…)`](https://docs.rs/egui/latest/egui/struct.Ui.html#method.image). You first need to convert the native texture to an [`egui::TextureId`](https://docs.rs/egui/latest/egui/enum.TextureId.html), and how to do this depends on the integration you use.
+
+Examples:
+* Using [`egui-miniquad`]( https://github.com/not-fl3/egui-miniquad): https://github.com/not-fl3/egui-miniquad/blob/master/examples/render_to_egui_image.rs
+* Using [`egui_glium`](https://github.com/emilk/egui/tree/master/crates/egui_glium): <https://github.com/emilk/egui/blob/master/crates/egui_glium/examples/native_texture.rs>.
 
 
 ## Other
@@ -350,7 +377,7 @@ All colors have premultiplied alpha.
 
 egui uses the builder pattern for construction widgets. For instance: `ui.add(Label::new("Hello").text_color(RED));` I am not a big fan of the builder pattern (it is quite verbose both in implementation and in use) but until Rust has named, default arguments it is the best we can do. To alleviate some of the verbosity there are common-case helper functions, like `ui.label("Hello");`.
 
-Instead of using matching `begin/end` style function calls (which can be error prone) egui prefers to use `FnOnce` closures passed to a wrapping function. Lambdas are a bit ugly though, so I'd like to find a nicer solution to this.
+Instead of using matching `begin/end` style function calls (which can be error prone) egui prefers to use `FnOnce` closures passed to a wrapping function. Lambdas are a bit ugly though, so I'd like to find a nicer solution to this. More discussion of this at <https://github.com/emilk/egui/issues/1004#issuecomment-1001650754>.
 
 ### Inspiration
 
@@ -372,13 +399,16 @@ Notable contributions by:
 * [@optozorax](https://github.com/optozorax): [Arbitrary widget data storage](https://github.com/emilk/egui/pull/257).
 * [@quadruple-output](https://github.com/quadruple-output): [Multitouch](https://github.com/emilk/egui/pull/306).
 * [@EmbersArc](https://github.com/EmbersArc): [Plots](https://github.com/emilk/egui/pulls?q=+is%3Apr+author%3AEmbersArc).
-* [@AsmPrgmC3](https://github.com/AsmPrgmC3): [Proper sRGBA blending in `egui_web`](https://github.com/emilk/egui/pull/650).
+* [@AsmPrgmC3](https://github.com/AsmPrgmC3): [Proper sRGBA blending for web](https://github.com/emilk/egui/pull/650).
 * [@AlexApps99](https://github.com/AlexApps99): [`egui_glow`](https://github.com/emilk/egui/pull/685).
 * [@mankinskin](https://github.com/mankinskin): [Context menus](https://github.com/emilk/egui/pull/543).
 * [@t18b219k](https://github.com/t18b219k): [Port glow painter to web](https://github.com/emilk/egui/pull/868).
+* [@danielkeller](https://github.com/danielkeller): [`Context` refactor](https://github.com/emilk/egui/pull/1050).
 * And [many more](https://github.com/emilk/egui/graphs/contributors?type=a).
 
 egui is licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE).
+
+* The flattening algorithm for the cubic bezier curve and quadratic bezier curve is from [lyon_geom](https://docs.rs/lyon_geom/latest/lyon_geom/)
 
 Default fonts:
 
