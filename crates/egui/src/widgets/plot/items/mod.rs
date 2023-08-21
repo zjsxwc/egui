@@ -7,7 +7,7 @@ use epaint::Mesh;
 
 use crate::*;
 
-use super::{LabelFormatter, PlotBounds, ScreenTransform};
+use super::{Cursor, LabelFormatter, PlotBounds, PlotTransform};
 use rect_elem::*;
 use values::{ClosestElem, PlotGeometry};
 
@@ -25,15 +25,16 @@ const DEFAULT_FILL_ALPHA: f32 = 0.05;
 /// Container to pass-through several parameters related to plot visualization
 pub(super) struct PlotConfig<'a> {
     pub ui: &'a Ui,
-    pub transform: &'a ScreenTransform,
+    pub transform: &'a PlotTransform,
     pub show_x: bool,
     pub show_y: bool,
 }
 
 /// Trait shared by things that can be drawn in the plot.
 pub(super) trait PlotItem {
-    fn shapes(&self, ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>);
+    fn shapes(&self, ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>);
 
+    /// For plot-items which are generated based on x values (plotting functions).
     fn initialize(&mut self, x_range: RangeInclusive<f64>);
 
     fn name(&self) -> &str;
@@ -48,7 +49,7 @@ pub(super) trait PlotItem {
 
     fn bounds(&self) -> PlotBounds;
 
-    fn find_closest(&self, point: Pos2, transform: &ScreenTransform) -> Option<ClosestElem> {
+    fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
         match self.geometry() {
             PlotGeometry::None => None,
 
@@ -72,6 +73,7 @@ pub(super) trait PlotItem {
         &self,
         elem: ClosestElem,
         shapes: &mut Vec<Shape>,
+        cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
         label_formatter: &LabelFormatter,
     ) {
@@ -96,7 +98,15 @@ pub(super) trait PlotItem {
         let pointer = plot.transform.position_from_point(&value);
         shapes.push(Shape::circle_filled(pointer, 3.0, line_color));
 
-        rulers_at_value(pointer, value, self.name(), plot, shapes, label_formatter);
+        rulers_at_value(
+            pointer,
+            value,
+            self.name(),
+            plot,
+            shapes,
+            cursors,
+            label_formatter,
+        );
     }
 }
 
@@ -167,7 +177,7 @@ impl HLine {
 }
 
 impl PlotItem for HLine {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let HLine {
             y,
             stroke,
@@ -175,9 +185,15 @@ impl PlotItem for HLine {
             style,
             ..
         } = self;
+
+        // Round to minimize aliasing:
         let points = vec![
-            transform.position_from_point(&PlotPoint::new(transform.bounds().min[0], *y)),
-            transform.position_from_point(&PlotPoint::new(transform.bounds().max[0], *y)),
+            ui.ctx().round_pos_to_pixels(
+                transform.position_from_point(&PlotPoint::new(transform.bounds().min[0], *y)),
+            ),
+            ui.ctx().round_pos_to_pixels(
+                transform.position_from_point(&PlotPoint::new(transform.bounds().max[0], *y)),
+            ),
         ];
         style.style_line(points, *stroke, *highlight, shapes);
     }
@@ -277,7 +293,7 @@ impl VLine {
 }
 
 impl PlotItem for VLine {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let VLine {
             x,
             stroke,
@@ -285,9 +301,15 @@ impl PlotItem for VLine {
             style,
             ..
         } = self;
+
+        // Round to minimize aliasing:
         let points = vec![
-            transform.position_from_point(&PlotPoint::new(*x, transform.bounds().min[1])),
-            transform.position_from_point(&PlotPoint::new(*x, transform.bounds().max[1])),
+            ui.ctx().round_pos_to_pixels(
+                transform.position_from_point(&PlotPoint::new(*x, transform.bounds().min[1])),
+            ),
+            ui.ctx().round_pos_to_pixels(
+                transform.position_from_point(&PlotPoint::new(*x, transform.bounds().max[1])),
+            ),
         ];
         style.style_line(points, *stroke, *highlight, shapes);
     }
@@ -397,11 +419,11 @@ impl Line {
 /// a horizontal line at the given y-coordinate.
 fn y_intersection(p1: &Pos2, p2: &Pos2, y: f32) -> Option<f32> {
     ((p1.y > y && p2.y < y) || (p1.y < y && p2.y > y))
-        .then(|| ((y * (p1.x - p2.x)) - (p1.x * p2.y - p1.y * p2.x)) / (p1.y - p2.y))
+        .then_some(((y * (p1.x - p2.x)) - (p1.x * p2.y - p1.y * p2.x)) / (p1.y - p2.y))
 }
 
 impl PlotItem for Line {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let Self {
             series,
             stroke,
@@ -438,7 +460,7 @@ impl PlotItem for Line {
             let expected_intersections = 20;
             mesh.reserve_triangles((n_values - 1) * 2);
             mesh.reserve_vertices(n_values * 2 + expected_intersections);
-            values_tf[0..n_values - 1].windows(2).for_each(|w| {
+            values_tf.windows(2).for_each(|w| {
                 let i = mesh.vertices.len() as u32;
                 mesh.colored_vertex(w[0], fill_color);
                 mesh.colored_vertex(pos2(w[0].x, y), fill_color);
@@ -562,7 +584,7 @@ impl Polygon {
 }
 
 impl PlotItem for Polygon {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let Self {
             series,
             stroke,
@@ -584,7 +606,7 @@ impl PlotItem for Polygon {
 
         let fill = Rgba::from(stroke.color).to_opaque().multiply(fill_alpha);
 
-        let shape = Shape::convex_polygon(values_tf.clone(), fill, Stroke::none());
+        let shape = Shape::convex_polygon(values_tf.clone(), fill, Stroke::NONE);
         shapes.push(shape);
         values_tf.push(*values_tf.first().unwrap());
         style.style_line(values_tf, *stroke, *highlight, shapes);
@@ -674,7 +696,7 @@ impl Text {
 }
 
 impl PlotItem for Text {
-    fn shapes(&self, ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let color = if self.color == Color32::TRANSPARENT {
             ui.style().visuals.text_color()
         } else {
@@ -738,15 +760,22 @@ impl PlotItem for Text {
 /// A set of points.
 pub struct Points {
     pub(super) series: PlotPoints,
+
     pub(super) shape: MarkerShape,
+
     /// Color of the marker. `Color32::TRANSPARENT` means that it will be picked automatically.
     pub(super) color: Color32,
+
     /// Whether to fill the marker. Does not apply to all types.
     pub(super) filled: bool,
+
     /// The maximum extent of the marker from its center.
     pub(super) radius: f32,
+
     pub(super) name: String,
+
     pub(super) highlight: bool,
+
     pub(super) stems: Option<f32>,
 }
 
@@ -814,7 +843,7 @@ impl Points {
 }
 
 impl PlotItem for Points {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let sqrt_3 = 3_f32.sqrt();
         let frac_sqrt_3_2 = 3_f32.sqrt() / 2.0;
         let frac_1_sqrt_2 = 1.0 / 2_f32.sqrt();
@@ -834,10 +863,11 @@ impl PlotItem for Points {
 
         let default_stroke = Stroke::new(stroke_size, *color);
         let mut stem_stroke = default_stroke;
-        let stroke = (!filled)
-            .then(|| default_stroke)
-            .unwrap_or_else(Stroke::none);
-        let fill = filled.then(|| *color).unwrap_or_default();
+        let (fill, stroke) = if *filled {
+            (*color, Stroke::NONE)
+        } else {
+            (Color32::TRANSPARENT, default_stroke)
+        };
 
         if *highlight {
             radius *= 2f32.sqrt();
@@ -974,6 +1004,7 @@ impl PlotItem for Points {
 pub struct Arrows {
     pub(super) origins: PlotPoints,
     pub(super) tips: PlotPoints,
+    pub(super) tip_length: Option<f32>,
     pub(super) color: Color32,
     pub(super) name: String,
     pub(super) highlight: bool,
@@ -984,6 +1015,7 @@ impl Arrows {
         Self {
             origins: origins.into(),
             tips: tips.into(),
+            tip_length: None,
             color: Color32::TRANSPARENT,
             name: Default::default(),
             highlight: false,
@@ -993,6 +1025,12 @@ impl Arrows {
     /// Highlight these arrows in the plot.
     pub fn highlight(mut self, highlight: bool) -> Self {
         self.highlight = highlight;
+        self
+    }
+
+    /// Set the length of the arrow tips
+    pub fn tip_length(mut self, tip_length: f32) -> Self {
+        self.tip_length = Some(tip_length);
         self
     }
 
@@ -1016,11 +1054,12 @@ impl Arrows {
 }
 
 impl PlotItem for Arrows {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         use crate::emath::*;
         let Self {
             origins,
             tips,
+            tip_length,
             color,
             highlight,
             ..
@@ -1039,7 +1078,11 @@ impl PlotItem for Arrows {
             .for_each(|(origin, tip)| {
                 let vector = tip - origin;
                 let rot = Rot2::from_angle(std::f32::consts::TAU / 10.0);
-                let tip_length = vector.length() / 4.0;
+                let tip_length = if let Some(tip_length) = tip_length {
+                    *tip_length
+                } else {
+                    vector.length() / 4.0
+                };
                 let tip = origin + vector;
                 let dir = vector.normalized();
                 shapes.push(Shape::line_segment([origin, tip], stroke));
@@ -1096,6 +1139,7 @@ pub struct PlotImage {
     pub(super) tint: Color32,
     pub(super) highlight: bool,
     pub(super) name: String,
+    pub(crate) rotation: Option<(f32, Vec2)>,
 }
 
 impl PlotImage {
@@ -1114,6 +1158,7 @@ impl PlotImage {
             size: size.into(),
             bg_fill: Default::default(),
             tint: Color32::WHITE,
+            rotation: None,
         }
     }
 
@@ -1152,10 +1197,21 @@ impl PlotImage {
         self.name = name.to_string();
         self
     }
+
+    /// Rotate the image about an origin by some angle
+    ///
+    /// Positive angle is clockwise.
+    /// Origin is a vector in normalized UV space ((0,0) in top-left, (1,1) bottom right).
+    ///
+    /// To rotate about the center you can pass `Vec2::splat(0.5)` as the origin.
+    pub fn rotate(mut self, angle: f32, origin: Vec2) -> Self {
+        self.rotation = Some((angle, origin));
+        self
+    }
 }
 
 impl PlotItem for PlotImage {
-    fn shapes(&self, ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let Self {
             position,
             texture_id,
@@ -1179,11 +1235,14 @@ impl PlotItem for PlotImage {
             let right_bottom_tf = transform.position_from_point(&right_bottom);
             Rect::from_two_pos(left_top_tf, right_bottom_tf)
         };
-        Image::new(*texture_id, *size)
+        let mut image = Image::new(*texture_id, *size)
             .bg_fill(*bg_fill)
             .tint(*tint)
-            .uv(*uv)
-            .paint_at(ui, rect);
+            .uv(*uv);
+        if let Some((angle, origin)) = self.rotation {
+            image = image.rotate(angle, origin);
+        }
+        image.paint_at(ui, rect);
         if *highlight {
             shapes.push(Shape::rect_stroke(
                 rect,
@@ -1238,8 +1297,10 @@ pub struct BarChart {
     pub(super) bars: Vec<Bar>,
     pub(super) default_color: Color32,
     pub(super) name: String,
+
     /// A custom element formatter
     pub(super) element_formatter: Option<Box<dyn Fn(&Bar, &BarChart) -> String>>,
+
     highlight: bool,
 }
 
@@ -1346,7 +1407,7 @@ impl BarChart {
 }
 
 impl PlotItem for BarChart {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         for b in &self.bars {
             b.add_shapes(transform, self.highlight, shapes);
         }
@@ -1384,7 +1445,7 @@ impl PlotItem for BarChart {
         bounds
     }
 
-    fn find_closest(&self, point: Pos2, transform: &ScreenTransform) -> Option<ClosestElem> {
+    fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
         find_closest_rect(&self.bars, point, transform)
     }
 
@@ -1392,13 +1453,14 @@ impl PlotItem for BarChart {
         &self,
         elem: ClosestElem,
         shapes: &mut Vec<Shape>,
+        cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
         _: &LabelFormatter,
     ) {
         let bar = &self.bars[elem.index];
 
         bar.add_shapes(plot.transform, true, shapes);
-        bar.add_rulers_and_text(self, plot, shapes);
+        bar.add_rulers_and_text(self, plot, shapes, cursors);
     }
 }
 
@@ -1407,8 +1469,10 @@ pub struct BoxPlot {
     pub(super) boxes: Vec<BoxElem>,
     pub(super) default_color: Color32,
     pub(super) name: String,
+
     /// A custom element formatter
     pub(super) element_formatter: Option<Box<dyn Fn(&BoxElem, &BoxPlot) -> String>>,
+
     highlight: bool,
 }
 
@@ -1488,7 +1552,7 @@ impl BoxPlot {
 }
 
 impl PlotItem for BoxPlot {
-    fn shapes(&self, _ui: &mut Ui, transform: &ScreenTransform, shapes: &mut Vec<Shape>) {
+    fn shapes(&self, _ui: &mut Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         for b in &self.boxes {
             b.add_shapes(transform, self.highlight, shapes);
         }
@@ -1526,7 +1590,7 @@ impl PlotItem for BoxPlot {
         bounds
     }
 
-    fn find_closest(&self, point: Pos2, transform: &ScreenTransform) -> Option<ClosestElem> {
+    fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
         find_closest_rect(&self.boxes, point, transform)
     }
 
@@ -1534,20 +1598,21 @@ impl PlotItem for BoxPlot {
         &self,
         elem: ClosestElem,
         shapes: &mut Vec<Shape>,
+        cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
         _: &LabelFormatter,
     ) {
         let box_plot = &self.boxes[elem.index];
 
         box_plot.add_shapes(plot.transform, true, shapes);
-        box_plot.add_rulers_and_text(self, plot, shapes);
+        box_plot.add_rulers_and_text(self, plot, shapes, cursors);
     }
 }
 
 // ----------------------------------------------------------------------------
 // Helper functions
 
-fn rulers_color(ui: &Ui) -> Color32 {
+pub(crate) fn rulers_color(ui: &Ui) -> Color32 {
     if ui.visuals().dark_mode {
         Color32::from_gray(100).additive()
     } else {
@@ -1555,7 +1620,11 @@ fn rulers_color(ui: &Ui) -> Color32 {
     }
 }
 
-fn vertical_line(pointer: Pos2, transform: &ScreenTransform, line_color: Color32) -> Shape {
+pub(crate) fn vertical_line(
+    pointer: Pos2,
+    transform: &PlotTransform,
+    line_color: Color32,
+) -> Shape {
     let frame = transform.frame();
     Shape::line_segment(
         [
@@ -1566,7 +1635,11 @@ fn vertical_line(pointer: Pos2, transform: &ScreenTransform, line_color: Color32
     )
 }
 
-fn horizontal_line(pointer: Pos2, transform: &ScreenTransform, line_color: Color32) -> Shape {
+pub(crate) fn horizontal_line(
+    pointer: Pos2,
+    transform: &PlotTransform,
+    line_color: Color32,
+) -> Shape {
     let frame = transform.frame();
     Shape::line_segment(
         [
@@ -1582,6 +1655,7 @@ fn add_rulers_and_text(
     plot: &PlotConfig<'_>,
     text: Option<String>,
     shapes: &mut Vec<Shape>,
+    cursors: &mut Vec<Cursor>,
 ) {
     let orientation = elem.orientation();
     let show_argument = plot.show_x && orientation == Orientation::Vertical
@@ -1589,37 +1663,23 @@ fn add_rulers_and_text(
     let show_values = plot.show_y && orientation == Orientation::Vertical
         || plot.show_x && orientation == Orientation::Horizontal;
 
-    let line_color = rulers_color(plot.ui);
-
     // Rulers for argument (usually vertical)
     if show_argument {
-        let push_argument_ruler = |argument: PlotPoint, shapes: &mut Vec<Shape>| {
-            let position = plot.transform.position_from_point(&argument);
-            let line = match orientation {
-                Orientation::Horizontal => horizontal_line(position, plot.transform, line_color),
-                Orientation::Vertical => vertical_line(position, plot.transform, line_color),
-            };
-            shapes.push(line);
-        };
-
         for pos in elem.arguments_with_ruler() {
-            push_argument_ruler(pos, shapes);
+            cursors.push(match orientation {
+                Orientation::Horizontal => Cursor::Horizontal { y: pos.y },
+                Orientation::Vertical => Cursor::Vertical { x: pos.x },
+            });
         }
     }
 
     // Rulers for values (usually horizontal)
     if show_values {
-        let push_value_ruler = |value: PlotPoint, shapes: &mut Vec<Shape>| {
-            let position = plot.transform.position_from_point(&value);
-            let line = match orientation {
-                Orientation::Horizontal => vertical_line(position, plot.transform, line_color),
-                Orientation::Vertical => horizontal_line(position, plot.transform, line_color),
-            };
-            shapes.push(line);
-        };
-
         for pos in elem.values_with_ruler() {
-            push_value_ruler(pos, shapes);
+            cursors.push(match orientation {
+                Orientation::Horizontal => Cursor::Vertical { x: pos.x },
+                Orientation::Vertical => Cursor::Horizontal { y: pos.y },
+            });
         }
     }
 
@@ -1628,6 +1688,7 @@ fn add_rulers_and_text(
         let mut text = elem.name().to_owned(); // could be empty
 
         if show_values {
+            text.push('\n');
             text.push_str(&elem.default_values_format(plot.transform));
         }
 
@@ -1637,14 +1698,16 @@ fn add_rulers_and_text(
     let font_id = TextStyle::Body.resolve(plot.ui.style());
 
     let corner_value = elem.corner_value();
-    shapes.push(Shape::text(
-        &*plot.ui.fonts(),
-        plot.transform.position_from_point(&corner_value) + vec2(3.0, -2.0),
-        Align2::LEFT_BOTTOM,
-        text,
-        font_id,
-        plot.ui.visuals().text_color(),
-    ));
+    plot.ui.fonts(|f| {
+        shapes.push(Shape::text(
+            f,
+            plot.transform.position_from_point(&corner_value) + vec2(3.0, -2.0),
+            Align2::LEFT_BOTTOM,
+            text,
+            font_id,
+            plot.ui.visuals().text_color(),
+        ));
+    });
 }
 
 /// Draws a cross of horizontal and vertical ruler at the `pointer` position.
@@ -1656,26 +1719,26 @@ pub(super) fn rulers_at_value(
     name: &str,
     plot: &PlotConfig<'_>,
     shapes: &mut Vec<Shape>,
+    cursors: &mut Vec<Cursor>,
     label_formatter: &LabelFormatter,
 ) {
-    let line_color = rulers_color(plot.ui);
     if plot.show_x {
-        shapes.push(vertical_line(pointer, plot.transform, line_color));
+        cursors.push(Cursor::Vertical { x: value.x });
     }
     if plot.show_y {
-        shapes.push(horizontal_line(pointer, plot.transform, line_color));
+        cursors.push(Cursor::Horizontal { y: value.y });
     }
 
     let mut prefix = String::new();
 
     if !name.is_empty() {
-        prefix = format!("{}\n", name);
+        prefix = format!("{name}\n");
     }
 
     let text = {
         let scale = plot.transform.dvalue_dpos();
-        let x_decimals = ((-scale[0].abs().log10()).ceil().at_least(0.0) as usize).at_most(6);
-        let y_decimals = ((-scale[1].abs().log10()).ceil().at_least(0.0) as usize).at_most(6);
+        let x_decimals = ((-scale[0].abs().log10()).ceil().at_least(0.0) as usize).clamp(1, 6);
+        let y_decimals = ((-scale[1].abs().log10()).ceil().at_least(0.0) as usize).clamp(1, 6);
         if let Some(custom_label) = label_formatter {
             custom_label(name, &value)
         } else if plot.show_x && plot.show_y {
@@ -1693,21 +1756,22 @@ pub(super) fn rulers_at_value(
     };
 
     let font_id = TextStyle::Body.resolve(plot.ui.style());
-
-    shapes.push(Shape::text(
-        &*plot.ui.fonts(),
-        pointer + vec2(3.0, -2.0),
-        Align2::LEFT_BOTTOM,
-        text,
-        font_id,
-        plot.ui.visuals().text_color(),
-    ));
+    plot.ui.fonts(|f| {
+        shapes.push(Shape::text(
+            f,
+            pointer + vec2(3.0, -2.0),
+            Align2::LEFT_BOTTOM,
+            text,
+            font_id,
+            plot.ui.visuals().text_color(),
+        ));
+    });
 }
 
 fn find_closest_rect<'a, T>(
     rects: impl IntoIterator<Item = &'a T>,
     point: Pos2,
-    transform: &ScreenTransform,
+    transform: &PlotTransform,
 ) -> Option<ClosestElem>
 where
     T: 'a + RectElement,

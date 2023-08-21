@@ -1,6 +1,5 @@
 //! The different shapes that can be painted.
 
-use std::ops::RangeInclusive;
 use std::{any::Any, sync::Arc};
 
 use crate::{
@@ -94,17 +93,19 @@ impl Shape {
     }
 
     /// A horizontal line.
-    pub fn hline(x: RangeInclusive<f32>, y: f32, stroke: impl Into<Stroke>) -> Self {
+    pub fn hline(x: impl Into<Rangef>, y: f32, stroke: impl Into<Stroke>) -> Self {
+        let x = x.into();
         Shape::LineSegment {
-            points: [pos2(*x.start(), y), pos2(*x.end(), y)],
+            points: [pos2(x.min, y), pos2(x.max, y)],
             stroke: stroke.into(),
         }
     }
 
     /// A vertical line.
-    pub fn vline(x: f32, y: RangeInclusive<f32>, stroke: impl Into<Stroke>) -> Self {
+    pub fn vline(x: f32, y: impl Into<Rangef>, stroke: impl Into<Stroke>) -> Self {
+        let y = y.into();
         Shape::LineSegment {
-            points: [pos2(x, *y.start()), pos2(x, *y.end())],
+            points: [pos2(x, y.min), pos2(x, y.max)],
             stroke: stroke.into(),
         }
     }
@@ -233,6 +234,12 @@ impl Shape {
         Self::Mesh(mesh)
     }
 
+    /// An image at the given position.
+    ///
+    /// `uv` should normally be `Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))`
+    /// unless you want to crop or flip the image.
+    ///
+    /// `tint` is a color multiplier. Use [`Color32::WHITE`] if you don't want to tint the image.
     pub fn image(texture_id: TextureId, rect: Rect, uv: Rect, tint: Color32) -> Self {
         let mut mesh = Mesh::with_texture(texture_id);
         mesh.add_rect_with_uv(rect, uv, tint);
@@ -275,6 +282,8 @@ impl Shape {
     pub fn texture_id(&self) -> super::TextureId {
         if let Shape::Mesh(mesh) = self {
             mesh.texture_id
+        } else if let Shape::Rect(rect_shape) = self {
+            rect_shape.fill_texture_id
         } else {
             super::TextureId::default()
         }
@@ -316,8 +325,8 @@ impl Shape {
                 bezier_shape.points[1] += delta;
                 bezier_shape.points[2] += delta;
             }
-            Shape::CubicBezier(cubie_curve) => {
-                for p in &mut cubie_curve.points {
+            Shape::CubicBezier(cubic_curve) => {
+                for p in &mut cubic_curve.points {
                     *p += delta;
                 }
             }
@@ -399,6 +408,8 @@ pub struct PathShape {
 
     /// Color and thickness of the line.
     pub stroke: Stroke,
+    // TODO(emilk): Add texture support either by supplying uv for each point,
+    // or by some transform from points to uv (e.g. a callback or a linear transform matrix).
 }
 
 impl PathShape {
@@ -469,7 +480,7 @@ impl From<PathShape> for Shape {
 pub struct RectShape {
     pub rect: Rect,
 
-    /// How rounded the corners are. Use `Rounding::none()` for no rounding.
+    /// How rounded the corners are. Use `Rounding::ZERO` for no rounding.
     pub rounding: Rounding,
 
     /// How to fill the rectangle.
@@ -477,9 +488,37 @@ pub struct RectShape {
 
     /// The thickness and color of the outline.
     pub stroke: Stroke,
+
+    /// If the rect should be filled with a texture, which one?
+    ///
+    /// The texture is multiplied with [`Self::fill`].
+    pub fill_texture_id: TextureId,
+
+    /// What UV coordinates to use for the texture?
+    ///
+    /// To display a texture, set [`Self::fill_texture_id`],
+    /// and set this to `Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))`.
+    pub uv: Rect,
 }
 
 impl RectShape {
+    #[inline]
+    pub fn new(
+        rect: Rect,
+        rounding: impl Into<Rounding>,
+        fill_color: impl Into<Color32>,
+        stroke: impl Into<Stroke>,
+    ) -> Self {
+        Self {
+            rect,
+            rounding: rounding.into(),
+            fill: fill_color.into(),
+            stroke: stroke.into(),
+            fill_texture_id: Default::default(),
+            uv: Rect::ZERO,
+        }
+    }
+
     #[inline]
     pub fn filled(
         rect: Rect,
@@ -491,6 +530,8 @@ impl RectShape {
             rounding: rounding.into(),
             fill: fill_color.into(),
             stroke: Default::default(),
+            fill_texture_id: Default::default(),
+            uv: Rect::ZERO,
         }
     }
 
@@ -501,6 +542,8 @@ impl RectShape {
             rounding: rounding.into(),
             fill: Default::default(),
             stroke: stroke.into(),
+            fill_texture_id: Default::default(),
+            uv: Rect::ZERO,
         }
     }
 
@@ -542,7 +585,7 @@ pub struct Rounding {
 impl Default for Rounding {
     #[inline]
     fn default() -> Self {
-        Self::none()
+        Self::ZERO
     }
 }
 
@@ -559,6 +602,14 @@ impl From<f32> for Rounding {
 }
 
 impl Rounding {
+    /// No rounding on any corner.
+    pub const ZERO: Self = Self {
+        nw: 0.0,
+        ne: 0.0,
+        sw: 0.0,
+        se: 0.0,
+    };
+
     #[inline]
     pub fn same(radius: f32) -> Self {
         Self {
@@ -570,6 +621,7 @@ impl Rounding {
     }
 
     #[inline]
+    #[deprecated = "Use Rounding::ZERO"]
     pub fn none() -> Self {
         Self {
             nw: 0.0,
@@ -619,7 +671,7 @@ pub struct TextShape {
     /// Top left corner of the first character.
     pub pos: Pos2,
 
-    /// The layed out text, from [`Fonts::layout_job`].
+    /// The laid out text, from [`Fonts::layout_job`].
     pub galley: Arc<Galley>,
 
     /// Add this underline to the whole text.
@@ -642,7 +694,7 @@ impl TextShape {
         Self {
             pos,
             galley,
-            underline: Stroke::none(),
+            underline: Stroke::NONE,
             override_text_color: None,
             angle: 0.0,
         }
@@ -762,7 +814,7 @@ pub struct ViewportInPixels {
     /// Viewport width in physical pixels.
     pub width_px: f32,
 
-    /// Viewport width in physical pixels.
+    /// Viewport height in physical pixels.
     pub height_px: f32,
 }
 
@@ -800,9 +852,9 @@ pub struct PaintCallback {
     ///
     /// The concrete value of `callback` depends on the rendering backend used. For instance, the
     /// `glow` backend requires that callback be an `egui_glow::CallbackFn` while the `wgpu`
-    /// backend requires a `egui_wgpu::CallbackFn`.
+    /// backend requires a `egui_wgpu::Callback`.
     ///
-    /// If the type cannnot be downcast to the type expected by the current backend the callback
+    /// If the type cannot be downcast to the type expected by the current backend the callback
     /// will not be drawn.
     ///
     /// The rendering backend is responsible for first setting the active viewport to
@@ -810,7 +862,9 @@ pub struct PaintCallback {
     ///
     /// The rendering backend is also responsible for restoring any state, such as the bound shader
     /// program, vertex array, etc.
-    pub callback: Arc<dyn Any + Sync + Send>,
+    ///
+    /// Shape has to be clone, therefore this has to be an `Arc` instead of a `Box`.
+    pub callback: Arc<dyn Any + Send + Sync>,
 }
 
 impl std::fmt::Debug for PaintCallback {

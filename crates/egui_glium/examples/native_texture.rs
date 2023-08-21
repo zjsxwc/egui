@@ -8,7 +8,7 @@ fn main() {
 
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let png_data = include_bytes!("../../../examples/retained_image/src/rust-logo-256x256.png");
+    let png_data = include_bytes!("../../../examples/retained_image/src/crab.png");
     let image = load_glium_image(png_data);
     let image_size = egui::vec2(image.width as f32, image.height as f32);
     // Load to gpu memory
@@ -18,7 +18,7 @@ fn main() {
     // Allocate egui's texture id for GL texture
     let texture_id = egui_glium
         .painter
-        .register_native_texture(glium_texture, egui::TextureFilter::Linear);
+        .register_native_texture(glium_texture, Default::default());
     // Setup button image size for reasonable image size for button container.
     let button_image_size = egui::vec2(32_f32, 32_f32);
 
@@ -78,8 +78,8 @@ fn main() {
             // Platform-dependent event handlers to workaround a winit bug
             // See: https://github.com/rust-windowing/winit/issues/987
             // See: https://github.com/rust-windowing/winit/issues/1619
-            glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
-            glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
+            glutin::event::Event::RedrawEventsCleared if cfg!(target_os = "windows") => redraw(),
+            glutin::event::Event::RedrawRequested(_) if !cfg!(target_os = "windows") => redraw(),
 
             glutin::event::Event::WindowEvent { event, .. } => {
                 use glutin::event::WindowEvent;
@@ -87,9 +87,11 @@ fn main() {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                 }
 
-                egui_glium.on_event(&event);
+                let event_response = egui_glium.on_event(&event);
 
-                display.gl_window().window().request_redraw(); // TODO(emilk): ask egui if the events warrants a repaint instead
+                if event_response.repaint {
+                    display.gl_window().window().request_redraw();
+                }
             }
             glutin::event::Event::NewEvents(glutin::event::StartCause::ResumeTimeReached {
                 ..
@@ -113,7 +115,6 @@ fn create_display(event_loop: &glutin::event_loop::EventLoop<()>) -> glium::Disp
 
     let context_builder = glutin::ContextBuilder::new()
         .with_depth_buffer(0)
-        .with_srgb(true)
         .with_stencil_buffer(0)
         .with_vsync(true);
 

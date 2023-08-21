@@ -10,6 +10,8 @@ fn main() {
 
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
+    let mut color_test = egui_demo_lib::ColorTest::default();
+
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
             let mut quit = false;
@@ -20,6 +22,12 @@ fn main() {
                     if ui.button("Quit").clicked() {
                         quit = true;
                     }
+                });
+
+                egui::CentralPanel::default().show(egui_ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        color_test.ui(ui);
+                    });
                 });
             });
 
@@ -57,8 +65,8 @@ fn main() {
             // Platform-dependent event handlers to workaround a winit bug
             // See: https://github.com/rust-windowing/winit/issues/987
             // See: https://github.com/rust-windowing/winit/issues/1619
-            glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
-            glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
+            glutin::event::Event::RedrawEventsCleared if cfg!(target_os = "windows") => redraw(),
+            glutin::event::Event::RedrawRequested(_) if !cfg!(target_os = "windows") => redraw(),
 
             glutin::event::Event::WindowEvent { event, .. } => {
                 use glutin::event::WindowEvent;
@@ -66,9 +74,11 @@ fn main() {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                 }
 
-                egui_glium.on_event(&event);
+                let event_response = egui_glium.on_event(&event);
 
-                display.gl_window().window().request_redraw(); // TODO(emilk): ask egui if the events warrants a repaint instead
+                if event_response.repaint {
+                    display.gl_window().window().request_redraw();
+                }
             }
             glutin::event::Event::NewEvents(glutin::event::StartCause::ResumeTimeReached {
                 ..
@@ -91,7 +101,6 @@ fn create_display(event_loop: &glutin::event_loop::EventLoop<()>) -> glium::Disp
 
     let context_builder = glutin::ContextBuilder::new()
         .with_depth_buffer(0)
-        .with_srgb(true)
         .with_stencil_buffer(0)
         .with_vsync(true);
 

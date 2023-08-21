@@ -39,6 +39,7 @@ impl Order {
         Self::Tooltip,
         Self::Debug,
     ];
+    pub const TOP: Self = Self::Debug;
 
     #[inline(always)]
     pub fn allow_interaction(&self) -> bool {
@@ -109,7 +110,7 @@ impl LayerId {
 }
 
 /// A unique identifier of a specific [`Shape`] in a [`PaintList`].
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ShapeIdx(usize);
 
 /// A list of [`Shape`]s paired with a clip rectangle.
@@ -126,13 +127,16 @@ impl PaintList {
     #[inline(always)]
     pub fn add(&mut self, clip_rect: Rect, shape: Shape) -> ShapeIdx {
         let idx = ShapeIdx(self.0.len());
-        self.0.push(ClippedShape(clip_rect, shape));
+        self.0.push(ClippedShape { clip_rect, shape });
         idx
     }
 
-    pub fn extend(&mut self, clip_rect: Rect, mut shapes: Vec<Shape>) {
-        self.0
-            .extend(shapes.drain(..).map(|shape| ClippedShape(clip_rect, shape)));
+    pub fn extend<I: IntoIterator<Item = Shape>>(&mut self, clip_rect: Rect, shapes: I) {
+        self.0.extend(
+            shapes
+                .into_iter()
+                .map(|shape| ClippedShape { clip_rect, shape }),
+        );
     }
 
     /// Modify an existing [`Shape`].
@@ -144,12 +148,12 @@ impl PaintList {
     /// and then later setting it using `paint_list.set(idx, cr, frame);`.
     #[inline(always)]
     pub fn set(&mut self, idx: ShapeIdx, clip_rect: Rect, shape: Shape) {
-        self.0[idx.0] = ClippedShape(clip_rect, shape);
+        self.0[idx.0] = ClippedShape { clip_rect, shape };
     }
 
     /// Translate each [`Shape`] and clip rectangle by this much, in-place
     pub fn translate(&mut self, delta: Vec2) {
-        for ClippedShape(clip_rect, shape) in &mut self.0 {
+        for ClippedShape { clip_rect, shape } in &mut self.0 {
             *clip_rect = clip_rect.translate(delta);
             shape.translate(delta);
         }

@@ -89,7 +89,7 @@ impl RotatingTriangle {
             let program = gl.create_program().expect("Cannot create program");
 
             if !shader_version.is_new_shader_interface() {
-                tracing::warn!(
+                log::warn!(
                     "Custom 3D painting hasn't been ported to {:?}",
                     shader_version
                 );
@@ -146,21 +146,23 @@ impl RotatingTriangle {
                         ),
                     );
                     gl.compile_shader(shader);
-                    if !gl.get_shader_compile_status(shader) {
-                        panic!(
-                            "Failed to compile custom_3d_glow: {}",
-                            gl.get_shader_info_log(shader)
-                        );
-                    }
+                    assert!(
+                        gl.get_shader_compile_status(shader),
+                        "Failed to compile custom_3d_glow {shader_type}: {}",
+                        gl.get_shader_info_log(shader)
+                    );
+
                     gl.attach_shader(program, shader);
                     shader
                 })
                 .collect();
 
             gl.link_program(program);
-            if !gl.get_program_link_status(program) {
-                panic!("{}", gl.get_program_info_log(program));
-            }
+            assert!(
+                gl.get_program_link_status(program),
+                "{}",
+                gl.get_program_info_log(program)
+            );
 
             for shader in shaders {
                 gl.detach_shader(program, shader);

@@ -20,15 +20,17 @@
 //!
 
 #![allow(clippy::float_cmp)]
-#![allow(clippy::manual_range_contains)]
+#![forbid(unsafe_code)]
 
 use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
 
 // ----------------------------------------------------------------------------
 
 pub mod align;
+mod history;
 mod numeric;
 mod pos2;
+mod range;
 mod rect;
 mod rect_transform;
 mod rot2;
@@ -37,8 +39,10 @@ mod vec2;
 
 pub use {
     align::{Align, Align2},
+    history::History,
     numeric::*,
     pos2::*,
+    range::Rangef,
     rect::*,
     rect_transform::*,
     rot2::*,
@@ -86,32 +90,77 @@ impl Real for f64 {}
 // ----------------------------------------------------------------------------
 
 /// Linear interpolation.
+///
+/// ```
+/// # use emath::lerp;
+/// assert_eq!(lerp(1.0..=5.0, 0.0), 1.0);
+/// assert_eq!(lerp(1.0..=5.0, 0.5), 3.0);
+/// assert_eq!(lerp(1.0..=5.0, 1.0), 5.0);
+/// assert_eq!(lerp(1.0..=5.0, 2.0), 9.0);
+/// ```
 #[inline(always)]
-pub fn lerp<R, T>(range: RangeInclusive<R>, t: T) -> R
+pub fn lerp<R, T>(range: impl Into<RangeInclusive<R>>, t: T) -> R
 where
     T: Real + Mul<R, Output = R>,
     R: Copy + Add<R, Output = R>,
 {
+    let range = range.into();
     (T::one() - t) * *range.start() + t * *range.end()
+}
+
+/// Where in the range is this value? Returns 0-1 if within the range.
+///
+/// Returns <0 if before and >1 if after.
+///
+/// Returns `None` if the input range is zero-width.
+///
+/// ```
+/// # use emath::inverse_lerp;
+/// assert_eq!(inverse_lerp(1.0..=5.0, 1.0), Some(0.0));
+/// assert_eq!(inverse_lerp(1.0..=5.0, 3.0), Some(0.5));
+/// assert_eq!(inverse_lerp(1.0..=5.0, 5.0), Some(1.0));
+/// assert_eq!(inverse_lerp(1.0..=5.0, 9.0), Some(2.0));
+/// assert_eq!(inverse_lerp(1.0..=1.0, 3.0), None);
+/// ```
+#[inline]
+pub fn inverse_lerp<R>(range: RangeInclusive<R>, value: R) -> Option<R>
+where
+    R: Copy + PartialEq + Sub<R, Output = R> + Div<R, Output = R>,
+{
+    let min = *range.start();
+    let max = *range.end();
+    if min == max {
+        None
+    } else {
+        Some((value - min) / (max - min))
+    }
 }
 
 /// Linearly remap a value from one range to another,
 /// so that when `x == from.start()` returns `to.start()`
 /// and when `x == from.end()` returns `to.end()`.
-pub fn remap<T>(x: T, from: RangeInclusive<T>, to: RangeInclusive<T>) -> T
+pub fn remap<T>(x: T, from: impl Into<RangeInclusive<T>>, to: impl Into<RangeInclusive<T>>) -> T
 where
     T: Real,
 {
+    let from = from.into();
+    let to = to.into();
     crate::emath_assert!(from.start() != from.end());
     let t = (x - *from.start()) / (*from.end() - *from.start());
     lerp(to, t)
 }
 
 /// Like [`remap`], but also clamps the value so that the returned value is always in the `to` range.
-pub fn remap_clamp<T>(x: T, from: RangeInclusive<T>, to: RangeInclusive<T>) -> T
+pub fn remap_clamp<T>(
+    x: T,
+    from: impl Into<RangeInclusive<T>>,
+    to: impl Into<RangeInclusive<T>>,
+) -> T
 where
     T: Real,
 {
+    let from = from.into();
+    let to = to.into();
     if from.end() < from.start() {
         return remap_clamp(x, *from.end()..=*from.start(), *to.end()..=*to.start());
     }
@@ -134,9 +183,7 @@ where
 /// Round a value to the given number of decimal places.
 pub fn round_to_decimals(value: f64, decimal_places: usize) -> f64 {
     // This is a stupid way of doing this, but stupid works.
-    format!("{:.*}", decimal_places, value)
-        .parse()
-        .unwrap_or(value)
+    format!("{value:.decimal_places$}").parse().unwrap_or(value)
 }
 
 pub fn format_with_minimum_decimals(value: f64, decimals: usize) -> String {
@@ -154,7 +201,7 @@ pub fn format_with_decimals_in_range(value: f64, decimal_range: RangeInclusive<u
     if min_decimals != max_decimals {
         // Ugly/slow way of doing this. TODO(emilk): clean up precision.
         for decimals in min_decimals..max_decimals {
-            let text = format!("{:.*}", decimals, value);
+            let text = format!("{value:.decimals$}");
             let epsilon = 16.0 * f32::EPSILON; // margin large enough to handle most peoples round-tripping needs
             if almost_equal(text.parse::<f32>().unwrap(), value as f32, epsilon) {
                 // Enough precision to show the value accurately - good!
@@ -165,7 +212,7 @@ pub fn format_with_decimals_in_range(value: f64, decimal_range: RangeInclusive<u
         // Probably the value was set not by the slider, but from outside.
         // In any case: show the full value
     }
-    format!("{:.*}", max_decimals, value)
+    format!("{value:.max_decimals$}")
 }
 
 /// Return true when arguments are the same within some rounding error.
@@ -241,9 +288,11 @@ fn test_remap() {
 /// Extends `f32`, [`Vec2`] etc with `at_least` and `at_most` as aliases for `max` and `min`.
 pub trait NumExt {
     /// More readable version of `self.max(lower_limit)`
+    #[must_use]
     fn at_least(self, lower_limit: Self) -> Self;
 
     /// More readable version of `self.min(upper_limit)`
+    #[must_use]
     fn at_most(self, upper_limit: Self) -> Self;
 }
 

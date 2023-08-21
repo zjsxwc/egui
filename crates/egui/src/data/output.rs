@@ -70,7 +70,7 @@ pub struct PlatformOutput {
     /// ```
     /// # egui::__run_test_ui(|ui| {
     /// if ui.button("📋").clicked() {
-    ///     ui.output().copied_text = "some_text".to_string();
+    ///     ui.output_mut(|o| o.copied_text = "some_text".to_string());
     /// }
     /// # });
     /// ```
@@ -85,6 +85,9 @@ pub struct PlatformOutput {
 
     /// Screen-space position of text edit cursor (used for IME).
     pub text_cursor_pos: Option<crate::Pos2>,
+
+    #[cfg(feature = "accesskit")]
+    pub accesskit_update: Option<accesskit::TreeUpdate>,
 }
 
 impl PlatformOutput {
@@ -97,7 +100,7 @@ impl PlatformOutput {
     /// This can be used by a text-to-speech system to describe the events (if any).
     pub fn events_description(&self) -> String {
         // only describe last event:
-        if let Some(event) = self.events.iter().rev().next() {
+        if let Some(event) = self.events.iter().next_back() {
             match event {
                 OutputEvent::Clicked(widget_info)
                 | OutputEvent::DoubleClicked(widget_info)
@@ -121,6 +124,8 @@ impl PlatformOutput {
             mut events,
             mutable_text_under_cursor,
             text_cursor_pos,
+            #[cfg(feature = "accesskit")]
+            accesskit_update,
         } = newer;
 
         self.cursor_icon = cursor_icon;
@@ -133,18 +138,25 @@ impl PlatformOutput {
         self.events.append(&mut events);
         self.mutable_text_under_cursor = mutable_text_under_cursor;
         self.text_cursor_pos = text_cursor_pos.or(self.text_cursor_pos);
+
+        #[cfg(feature = "accesskit")]
+        {
+            // egui produces a complete AccessKit tree for each frame,
+            // so overwrite rather than appending.
+            self.accesskit_update = accesskit_update;
+        }
     }
 
     /// Take everything ephemeral (everything except `cursor_icon` currently)
     pub fn take(&mut self) -> Self {
         let taken = std::mem::take(self);
-        self.cursor_icon = taken.cursor_icon; // eveything else is ephemeral
+        self.cursor_icon = taken.cursor_icon; // everything else is ephemeral
         taken
     }
 }
 
 /// What URL to open, and how.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct OpenUrl {
     pub url: String,
@@ -173,12 +185,29 @@ impl OpenUrl {
     }
 }
 
+/// Types of attention to request from a user when a native window is not in focus.
+///
+/// See [winit's documentation][user_attention_type] for platform-specific meaning of the attention types.
+///
+/// [user_attention_type]: https://docs.rs/winit/latest/winit/window/enum.UserAttentionType.html
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UserAttentionType {
+    /// Request an elevated amount of animations and flair for the window and the task bar or dock icon.
+    Critical,
+
+    /// Request a standard amount of attention-grabbing actions.
+    Informational,
+
+    /// Reset the attention request and interrupt related animations and flashes.
+    Reset,
+}
+
 /// A mouse cursor icon.
 ///
 /// egui emits a [`CursorIcon`] in [`PlatformOutput`] each frame as a request to the integration.
 ///
 /// Loosely based on <https://developer.mozilla.org/en-US/docs/Web/CSS/cursor>.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum CursorIcon {
     /// Normal cursor icon, whatever that is.
@@ -349,7 +378,7 @@ impl Default for CursorIcon {
 
 /// Things that happened during this frame that the integration may be interested in.
 ///
-/// In particular, these events may be useful for accessability, i.e. for screen readers.
+/// In particular, these events may be useful for accessibility, i.e. for screen readers.
 #[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum OutputEvent {
@@ -372,15 +401,28 @@ pub enum OutputEvent {
     ValueChanged(WidgetInfo),
 }
 
+impl OutputEvent {
+    pub fn widget_info(&self) -> &WidgetInfo {
+        match self {
+            OutputEvent::Clicked(info)
+            | OutputEvent::DoubleClicked(info)
+            | OutputEvent::TripleClicked(info)
+            | OutputEvent::FocusGained(info)
+            | OutputEvent::TextSelectionChanged(info)
+            | OutputEvent::ValueChanged(info) => info,
+        }
+    }
+}
+
 impl std::fmt::Debug for OutputEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Clicked(wi) => write!(f, "Clicked({:?})", wi),
-            Self::DoubleClicked(wi) => write!(f, "DoubleClicked({:?})", wi),
-            Self::TripleClicked(wi) => write!(f, "TripleClicked({:?})", wi),
-            Self::FocusGained(wi) => write!(f, "FocusGained({:?})", wi),
-            Self::TextSelectionChanged(wi) => write!(f, "TextSelectionChanged({:?})", wi),
-            Self::ValueChanged(wi) => write!(f, "ValueChanged({:?})", wi),
+            Self::Clicked(wi) => write!(f, "Clicked({wi:?})"),
+            Self::DoubleClicked(wi) => write!(f, "DoubleClicked({wi:?})"),
+            Self::TripleClicked(wi) => write!(f, "TripleClicked({wi:?})"),
+            Self::FocusGained(wi) => write!(f, "FocusGained({wi:?})"),
+            Self::TextSelectionChanged(wi) => write!(f, "TextSelectionChanged({wi:?})"),
+            Self::ValueChanged(wi) => write!(f, "ValueChanged({wi:?})"),
         }
     }
 }
@@ -567,14 +609,14 @@ impl WidgetInfo {
         if let Some(selected) = selected {
             if *typ == WidgetType::Checkbox {
                 let state = if *selected { "checked" } else { "unchecked" };
-                description = format!("{} {}", state, description);
+                description = format!("{state} {description}");
             } else {
                 description += if *selected { "selected" } else { "" };
             };
         }
 
         if let Some(label) = label {
-            description = format!("{}: {}", label, description);
+            description = format!("{label}: {description}");
         }
 
         if typ == &WidgetType::TextEdit {
@@ -588,7 +630,7 @@ impl WidgetInfo {
             } else {
                 text = "blank".into();
             }
-            description = format!("{}: {}", text, description);
+            description = format!("{text}: {description}");
         }
 
         if let Some(value) = value {
